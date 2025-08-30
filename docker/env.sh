@@ -1,5 +1,19 @@
 #!/bin/bash -e
 
+load_dotenv() {
+  local file="${1:-.env}"
+  # export everything that gets defined while sourcing
+  set -a
+  # strip CRLF, trim leading spaces, drop comments/blank lines,
+  # and keep only KEY=VALUE assignments
+  source <(sed -e 's/\r$//' -e 's/^[[:space:]]*//' \
+               -e '/^#/d' -e '/^[[:space:]]*$/d' \
+               -e '/^[A-Za-z_][A-Za-z0-9_]*=/!d' "$file")
+  set +a
+}
+
+load_dotenv .env
+
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
 # check for license key in env, override .env
@@ -9,19 +23,19 @@ if [[ "$LICENSE_KEY" != "" ]]; then
 fi
 
 # setup env
-$(cat .env | grep -vE '^#' | grep -v BACKEND_IMAGE_NAME | grep -v FRONTEND_IMAGE_NAME | grep -E '\S+' | sed -e 's/^/export /')
+# $(cat .env | grep -vE '^#' | grep -v BACKEND_IMAGE_NAME | grep -v FRONTEND_IMAGE_NAME | grep -E '\S+' | sed -e 's/^/export /')
 export IN_DOCKER=true
 export BACKEND_HEALTH_URI=$(echo "$REACT_APP_PUBLIC_GRAPH_URI" | sed -e 's/\/public/\/health/')
 export LICENSE_KEY=$LICENSE_KEY_OVERRIDE
 export BUILD_ARGS="--build-arg DOPPLER_TOKEN=${DOPPLER_TOKEN}"
 
 # if doppler is configured, use the doppler SSL value
-export -n DOPPLER_CONFIG
-DOPPLER_SSL=$(DOPPLER_CONFIG="" DOPPLER_TOKEN="" doppler secrets get SSL --plain || true)
-if [[ "$DOPPLER_SSL" =~ ^(true|false)$ ]]; then
-    export SSL=${DOPPLER_SSL}
-    echo "Using doppler-set SSL value ${SSL}."
-fi
+export -n DOPPLER_CONFIG || true
+# DOPPLER_SSL=$(DOPPLER_CONFIG="" DOPPLER_TOKEN="" doppler secrets get SSL --plain || true)
+# if [[ "$DOPPLER_SSL" =~ ^(true|false)$ ]]; then
+#     export SSL=${DOPPLER_SSL}
+#     echo "Using doppler-set SSL value ${SSL}."
+# fi
 
 if [[ "$*" == *"--go-docker"* ]]; then
     export CLICKHOUSE_ADDRESS=clickhouse:9000

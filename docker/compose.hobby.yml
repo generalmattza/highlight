@@ -1,31 +1,45 @@
-# Highlight.io services for the hobby deployment.
 services:
-    backend:
-        container_name: backend
-        image: ${BACKEND_IMAGE_NAME-ghcr.io/highlight/highlight-backend:latest}
-        restart: on-failure
-        ports:
-            - '0.0.0.0:8082:8082'
-        volumes:
-            - highlight-data:/highlight-data
-            - ../backend/env.enc:/build/env.enc
-            - ../backend/env.enc.dgst:/build/env.enc.dgst
-            - ../backend/localhostssl/server.key:/build/localhostssl/server.key
-            - ../backend/localhostssl/server.crt:/build/localhostssl/server.crt
-        env_file: .env
+  backend:
+    image: ${BACKEND_IMAGE_NAME:-ghcr.io/highlight/highlight-backend:docker-v0.5.2}
+    container_name: backend
+    restart: on-failure
+    expose: ["8082"]
+    env_file: .env
+    volumes:
+      - highlight-data:/highlight-data
+      - ../backend/env.enc:/build/env.enc
+      - ../backend/env.enc.dgst:/build/env.enc.dgst
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.highlight-backend.rule=Host(`${FQDN}`) && PathPrefix(`/api`)
+      - traefik.http.routers.highlight-backend.entrypoints=websecure
+      - traefik.http.routers.highlight-backend.tls=true
+      - traefik.http.middlewares.api-strip.stripprefix.prefixes=/api
+      - traefik.http.routers.highlight-backend.middlewares=api-strip@docker
+      - traefik.http.services.highlight-backend.loadbalancer.server.port=8082
+      - traefik.docker.network=highlight
+    networks: [highlight, highlight-proxy]
 
-    frontend:
-        container_name: frontend
-        image: ${FRONTEND_IMAGE_NAME-ghcr.io/highlight/highlight-frontend:latest}
-        restart: on-failure
-        volumes:
-            - ../backend/localhostssl/server.key:/etc/ssl/private/ssl-cert.key
-            - ../backend/localhostssl/server.pem:/etc/ssl/certs/ssl-cert.pem
-        ports:
-            - '0.0.0.0:3000:3000'
-            - '0.0.0.0:6006:6006'
-            - '0.0.0.0:8080:8080'
-        env_file: .env
+  frontend:
+    image: ${FRONTEND_IMAGE_NAME:-ghcr.io/highlight/highlight-frontend:docker-v0.5.2}
+    container_name: frontend
+    restart: on-failure
+    expose: ["3000"]
+    env_file: .env
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.highlight-frontend.rule=Host(`${FQDN}`)
+      - traefik.http.routers.highlight-frontend.entrypoints=websecure
+      - traefik.http.routers.highlight-frontend.tls=true
+      - traefik.http.services.highlight-frontend.loadbalancer.server.port=3000
+      - traefik.docker.network=highlight
+    networks: [highlight, highlight-proxy]
 
 volumes:
-    highlight-data:
+  highlight-data:
+
+networks:
+  highlight:
+    external: true
+  highlight-proxy:
+    external: true
